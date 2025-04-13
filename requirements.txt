@@ -1,0 +1,12 @@
+opencv-python-headless
+dlib
+numpy
+ultralytics
+mistralai
+Pillow
+requests
+SpeechRecognition
+face-recognition
+picamera2
+moondream
+python-dotenv
