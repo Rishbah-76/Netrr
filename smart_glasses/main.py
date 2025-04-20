@@ -45,6 +45,12 @@ def main():
                        help="Microphone availability (auto=detect, true=force on, false=force off)")
     parser.add_argument("--speaker", type=str, default=None, choices=["auto", "true", "false"], 
                        help="Speaker availability (auto=detect, true=force on, false=force off)")
+    parser.add_argument("--model", type=str, default="yoloe-11s-seg.pt",
+                       help="Model path for object detection (default: yoloe-11s-seg.pt)")
+    parser.add_argument("--audio-input-device", type=int, default=None,
+                       help="Audio input device index (for bluetooth microphone)")
+    parser.add_argument("--audio-output-device", type=int, default=None, 
+                       help="Audio output device index (for bluetooth earphones)")
     parser.add_argument("--log-level", type=str, default="INFO", 
                        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
                        help="Logging level")
@@ -90,6 +96,15 @@ def main():
         logging.info("Speaker forced OFF by configuration")
     # If "auto" or None, it will be auto-detected
     
+    # Configure audio devices
+    if args.audio_input_device is not None:
+        config["audio_input_device"] = args.audio_input_device
+        logging.info(f"Using audio input device index: {args.audio_input_device}")
+        
+    if args.audio_output_device is not None:
+        config["audio_output_device"] = args.audio_output_device
+        logging.info(f"Using audio output device index: {args.audio_output_device}")
+    
     # Create instances of each module
     logging.info("Initializing Smart Glasses system...")
     
@@ -100,7 +115,10 @@ def main():
         # Initialize modules based on selected mode
         if args.mode in ["all", "object"]:
             logging.info("Initializing object detection module...")
-            modules["object_detector"] = ObjectDetector(config)
+            # Add model path to config
+            object_config = config.copy()
+            object_config["model_path"] = args.model
+            modules["object_detector"] = ObjectDetector(object_config)
             active_modules.append("object_detector")
             
         # Initialize text recognition module

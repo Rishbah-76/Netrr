@@ -15,6 +15,17 @@ class TextReader(SmartGlasses):
         # API keys for OCR services
         self.google_vision_api_key = os.environ.get("GOOGLE_VISION_API_KEY", "YOUR_GOOGLE_VISION_API_KEY")
         
+        # Initialize Mistral client if available
+        if hasattr(self, 'mistral_client') and self.mistral_client is None:
+            mistral_api_key = self.get("mistral_api_key", os.environ.get("MISTRAL_API_KEY"))
+            if mistral_api_key and mistral_api_key != "YOUR_API_KEY_HERE":
+                try:
+                    from mistralai import Mistral
+                    self.mistral_client = Mistral(api_key=mistral_api_key)
+                except (ImportError, Exception) as e:
+                    print(f"Error initializing Mistral client: {e}")
+                    self.mistral_client = None
+        
         # Language settings
         self.source_language = 'en'  # Default source language
         self.target_language = 'en'  # Default target language

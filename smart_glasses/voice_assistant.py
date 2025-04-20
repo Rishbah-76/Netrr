@@ -6,7 +6,10 @@ import json
 import logging
 import sys
 import queue
-from .base import SmartGlasses
+import pyaudio
+import wave
+import os
+from .base import SmartGlasses, PYAUDIO_AVAILABLE
 
 class VoiceAssistant(SmartGlasses):
     """Voice command processing and conversation mode with keyboard fallback"""
@@ -19,31 +22,80 @@ class VoiceAssistant(SmartGlasses):
         if self.has_microphone:
             try:
                 self.recognizer = sr.Recognizer()
-                self.microphone = sr.Microphone()
+                
+                # Set mic device index if provided in config
+                mic_index = config.get("mic_index", None)
+                
+                # Use the audio_input_device from base class if already detected
+                if self.audio_input_device is not None:
+                    mic_index = self.audio_input_device
+                
+                if mic_index is not None:
+                    self.microphone = sr.Microphone(device_index=mic_index)
+                    logging.info(f"Using microphone device with index {mic_index}")
+                else:
+                    # Try to find a bluetooth device
+                    try:
+                        mics = sr.Microphone.list_microphone_names()
+                        logging.info(f"Available microphones: {mics}")
+                        for i, mic_name in enumerate(mics):
+                            if any(bt_keyword in mic_name.lower() for bt_keyword in ['bluetooth', 'airpod', 'wireless', 'bt']):
+                                logging.info(f"Found bluetooth microphone: {mic_name} at index {i}")
+                                self.microphone = sr.Microphone(device_index=i)
+                                break
+                        else:
+                            # If no bluetooth device found, use default
+                            self.microphone = sr.Microphone()
+                            logging.info("Using default microphone")
+                    except Exception as e:
+                        logging.error(f"Error finding bluetooth microphone: {e}")
+                        self.microphone = sr.Microphone()
+                        logging.info("Using default microphone")
                 
                 # Adjust for ambient noise
                 with self.microphone as source:
                     self.recognizer.adjust_for_ambient_noise(source)
+                    # Increase energy threshold for better noise handling
+                    self.recognizer.energy_threshold = 4000  # Default is 300
+                    # Adjust pause threshold for bluetooth mics which may have delay
+                    self.recognizer.pause_threshold = 1.0  # Default is 0.8
+                    
                 logging.info("Speech recognition initialized")
+                # Speak initialization message
+                self.speak("Voice recognition system ready. I'm listening.")
             except Exception as e:
                 logging.error(f"Failed to initialize speech recognition: {e}")
                 self.has_microphone = False
         
-        # Wake words
-        self.wake_words = ["hey glasses", "hey assistant", "wake up"]
+        # Wake words - more variations for better recognition
+        self.wake_words = [
+            "hey glasses", "hey glass", "ok glasses", "okay glasses", 
+            "hey assistant", "wake up", "glasses", "assistant", 
+            "listen", "hey smart glasses"
+        ]
         
         # Command mapping
         self.commands = {
             "describe": self.cmd_describe_scene,
+            "what do you see": self.cmd_describe_scene,
+            "what's in front of me": self.cmd_describe_scene,
             "read": self.cmd_read_text,
+            "read this": self.cmd_read_text,
+            "read text": self.cmd_read_text,
             "translate": self.cmd_translate,
             "who is": self.cmd_identify_person,
+            "who's this": self.cmd_identify_person,
             "remember": self.cmd_remember_person,
             "what color": self.cmd_identify_color,
+            "what's the color": self.cmd_identify_color,
             "currency": self.cmd_identify_currency,
+            "money": self.cmd_identify_currency,
             "tell me about": self.cmd_tell_about,
             "conversation mode": self.cmd_start_conversation,
+            "start conversation": self.cmd_start_conversation,
+            "chat mode": self.cmd_start_conversation,
             "exit": self.cmd_exit_conversation,
+            "exit conversation": self.cmd_exit_conversation,
             "help": self.cmd_help
         }
         
@@ -74,6 +126,23 @@ class VoiceAssistant(SmartGlasses):
         self.face_recognizer = None
         self.scene_analyzer = None
         
+        # Enhanced feedback for blind users
+        self.provide_audio_feedback = True
+        self.voice_feedback_sounds = {
+            "startup": "Ready for voice commands",
+            "listening": "Listening",
+            "processing": "Processing your request",
+            "success": "Command completed",
+            "failure": "Sorry, I couldn't do that"
+        }
+        
+        # Audio recording settings
+        self.FORMAT = pyaudio.paInt16
+        self.CHANNELS = 1
+        self.RATE = 44100
+        self.CHUNK = 1024
+        self.RECORD_SECONDS = 5  # Maximum recording time for a command
+        
         logging.info("Voice assistant initialized")
     
     def set_modules(self, object_detector=None, text_reader=None, face_recognizer=None, scene_analyzer=None):
@@ -92,34 +161,205 @@ class VoiceAssistant(SmartGlasses):
             
         try:
             self.recognizer = sr.Recognizer()
-            self.microphone = sr.Microphone()
+            
+            # Use existing microphone
+            if not hasattr(self, 'microphone'):
+                self.microphone = sr.Microphone()
             
             # Adjust for ambient noise
             with self.microphone as source:
                 logging.info("Adjusting for ambient noise...")
                 self.recognizer.adjust_for_ambient_noise(source)
+                # Increase energy threshold for better noise handling
+                self.recognizer.energy_threshold = 4000  # Default is 300
+                # Adjust pause threshold for bluetooth mics which may have delay
+                self.recognizer.pause_threshold = 1.0  # Default is 0.8
                 
             logging.info("Speech recognition initialized")
+            if self.provide_audio_feedback:
+                self.speak("Voice recognition ready")
             return True
         except Exception as e:
             logging.error(f"Failed to initialize speech recognition: {e}")
             self.has_microphone = False
             return False
     
+    def play_audio_feedback(self, feedback_type):
+        """Play audio feedback for the blind user"""
+        if self.provide_audio_feedback and feedback_type in self.voice_feedback_sounds:
+            # Only say "Listening" once per session
+            if feedback_type == "listening":
+                # Check if we've already said this
+                if hasattr(self, '_said_listening') and self._said_listening:
+                    # Just print it to terminal instead
+                    print("Listening...")
+                    return
+                else:
+                    # Mark that we've said it once
+                    self._said_listening = True
+            
+            # Use a separate method that directly calls speak
+            # instead of starting a new thread to avoid thread conflicts
+            message = self.voice_feedback_sounds[feedback_type]
+            
+            if feedback_type == "listening":
+                # For listening, just print to console after the first time
+                print(f"{message}...")
+            else:
+                # For other feedbacks, use the speaker but don't wait
+                try:
+                    # Import here to avoid circular imports
+                    from .edge import speak as edge_speak
+                    # Direct call without threading to avoid conflicts
+                    edge_speak(message)
+                except ImportError:
+                    # Fall back to normal speak method
+                    self.speak(message, False)
+    
+    def listen_with_pyaudio(self, timeout=None):
+        """Listen for a voice command using PyAudio directly (for better bluetooth support)"""
+        if not PYAUDIO_AVAILABLE or self.pyaudio is None:
+            return None
+            
+        temp_file = "temp_recording.wav"
+        try:
+            # Provide audio feedback that we're listening
+            self.play_audio_feedback("listening")
+            
+            # Open stream for recording
+            stream = self.pyaudio.open(
+                format=self.FORMAT,
+                channels=self.CHANNELS,
+                rate=self.RATE,
+                input=True,
+                frames_per_buffer=self.CHUNK,
+                input_device_index=self.audio_input_device
+            )
+            
+            logging.info("Listening with PyAudio...")
+            frames = []
+            
+            # Set a maximum recording time
+            max_seconds = timeout or self.RECORD_SECONDS
+            max_chunks = int(self.RATE / self.CHUNK * max_seconds)
+            
+            # Record audio
+            for _ in range(max_chunks):
+                data = stream.read(self.CHUNK, exception_on_overflow=False)
+                frames.append(data)
+                
+                # Implement a simple silence detection to stop recording early
+                # This is a basic implementation and could be improved
+                if len(frames) > 10:  # Wait for at least 10 chunks before checking silence
+                    # Simple threshold check for silence
+                    last_chunk = frames[-1]
+                    is_silence = max(abs(int.from_bytes(last_chunk[i:i+2], byteorder='little', signed=True)) 
+                                   for i in range(0, len(last_chunk), 2)) < 500
+                    if is_silence:
+                        silent_chunks_count = sum(1 for i in range(1, 6) if i <= len(frames) and 
+                                             max(abs(int.from_bytes(frames[-i][j:j+2], byteorder='little', signed=True)) 
+                                            for j in range(0, len(frames[-i]), 2)) < 500)
+                        
+                        # If we have several consecutive silent chunks, stop recording
+                        if silent_chunks_count >= 5:
+                            logging.info("Detected end of speech")
+                            break
+            
+            # Stop and close the recording stream
+            stream.stop_stream()
+            stream.close()
+            
+            # Save the recorded audio to a WAV file
+            wf = wave.open(temp_file, 'wb')
+            wf.setnchannels(self.CHANNELS)
+            wf.setsampwidth(self.pyaudio.get_sample_size(self.FORMAT))
+            wf.setframerate(self.RATE)
+            wf.writeframes(b''.join(frames))
+            wf.close()
+            
+            # Provide feedback that we're processing
+            self.play_audio_feedback("processing")
+            
+            # Process with speech recognition
+            with sr.AudioFile(temp_file) as source:
+                audio_data = self.recognizer.record(source)
+                
+                # Try multiple speech recognition services
+                try:
+                    text = self.recognizer.recognize_google(audio_data).lower()
+                    logging.info(f"Recognized with PyAudio (Google): {text}")
+                    return text
+                except sr.UnknownValueError:
+                    logging.info("Google couldn't understand audio, trying Sphinx")
+                except sr.RequestError:
+                    logging.info("Google service unavailable, trying Sphinx")
+                    
+                # Try Sphinx as fallback (offline, but less accurate)
+                try:
+                    text = self.recognizer.recognize_sphinx(audio_data).lower()
+                    logging.info(f"Recognized with PyAudio (Sphinx): {text}")
+                    return text
+                except Exception as e:
+                    logging.info(f"Sphinx recognition failed: {e}")
+                    return None
+                    
+        except Exception as e:
+            logging.error(f"Error using PyAudio for listening: {e}")
+            return None
+        finally:
+            # Clean up the temporary file
+            if os.path.exists(temp_file):
+                try:
+                    os.remove(temp_file)
+                except:
+                    pass
+    
     def listen_for_command(self, timeout=None):
         """Listen for a voice command and return the text"""
         if not self.has_microphone:
             return None
             
+        # Try PyAudio method first if available (better for bluetooth)
+        if PYAUDIO_AVAILABLE and self.pyaudio and self.audio_input_device is not None:
+            result = self.listen_with_pyaudio(timeout)
+            if result:
+                return result
+            
+        # Fall back to standard speech_recognition method
         try:
+            # Provide audio feedback that we're listening
+            self.play_audio_feedback("listening")
+            
             with self.microphone as source:
                 logging.info("Listening...")
                 audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=5)
             
+            # Provide feedback that we're processing
+            self.play_audio_feedback("processing")
+            
             logging.info("Processing speech...")
-            text = self.recognizer.recognize_google(audio).lower()
-            logging.info(f"Recognized: {text}")
-            return text
+            # Try multiple speech recognition services for better results
+            
+            # First try Google (most reliable but requires internet)
+            try:
+                text = self.recognizer.recognize_google(audio).lower()
+                logging.info(f"Recognized (Google): {text}")
+                return text
+            except sr.UnknownValueError:
+                logging.info("Google couldn't understand audio, trying Sphinx")
+            except sr.RequestError:
+                logging.info("Google service unavailable, trying Sphinx")
+                
+            # Try Sphinx as fallback (offline, but less accurate)
+            try:
+                import speech_recognition as sr_fallback
+                text = self.recognizer.recognize_sphinx(audio).lower()
+                logging.info(f"Recognized (Sphinx): {text}")
+                return text
+            except (sr.UnknownValueError, ImportError, AttributeError) as e:
+                logging.info(f"Sphinx recognition failed: {e}")
+                return None
+                
         except sr.WaitTimeoutError:
             return None
         except sr.UnknownValueError:
@@ -127,6 +367,9 @@ class VoiceAssistant(SmartGlasses):
             return None
         except sr.RequestError as e:
             logging.error(f"Speech recognition error: {e}")
+            return None
+        except Exception as e:
+            logging.error(f"Unexpected error in speech recognition: {e}")
             return None
     
     def keyboard_input_thread(self):
@@ -156,6 +399,39 @@ class VoiceAssistant(SmartGlasses):
                 break
             except Exception as e:
                 logging.error(f"Error in keyboard input: {e}")
+    
+    def fuzzy_command_match(self, command):
+        """Match a command with fuzzy matching for better voice recognition"""
+        if not command:
+            return None, None
+            
+        command = command.lower()
+        best_match = None
+        best_score = 0
+        
+        for cmd_key in self.commands.keys():
+            # Exact match
+            if command.startswith(cmd_key):
+                return cmd_key, command[len(cmd_key):].strip()
+                
+            # Fuzzy match - check if all words in the cmd_key appear in the command
+            cmd_words = cmd_key.split()
+            if all(word in command for word in cmd_words):
+                # Calculate a simple match score (percentage of command covered by cmd_key)
+                score = sum(len(word) for word in cmd_words) / len(command)
+                if score > best_score:
+                    best_score = score
+                    best_match = cmd_key
+        
+        # If we found a good fuzzy match (>50% match)
+        if best_match and best_score > 0.5:
+            # Extract parameter by removing the matched command words
+            param = command
+            for word in best_match.split():
+                param = param.replace(word, "").strip()
+            return best_match, param
+            
+        return None, None
     
     def process_command(self, command):
         """Process a recognized command"""
@@ -193,37 +469,47 @@ class VoiceAssistant(SmartGlasses):
             return True
         
         # Normal command mode processing
-        # Check for wake words first (only for voice commands)
-        if not any(wake_word in command for wake_word in self.wake_words) and command.startswith(tuple(self.commands.keys())):
-            # For keyboard input, we don't require wake words if command is recognized
+        # Check for wake words first (only for voice commands, not for keyboard input)
+        has_wake_word = any(wake_word in command for wake_word in self.wake_words)
+        is_keyboard_shortcut = command.startswith(tuple(self.keyboard_shortcuts.keys()))
+        is_direct_command = command.startswith(tuple(self.commands.keys()))
+        
+        if not self.keyboard_queue.empty():
+            # For keyboard input, we don't require wake words
             pass
-        elif not any(wake_word in command for wake_word in self.wake_words) and not command.startswith(tuple(self.keyboard_shortcuts.keys())):
-            # Only require wake word if not using a keyboard shortcut
+        elif not has_wake_word and not is_keyboard_shortcut and not is_direct_command:
+            # Only require wake word for voice input
             logging.info("Command missing wake word")
             return False
         
         # Remove wake word from command
         for wake_word in self.wake_words:
-            command = command.replace(wake_word, "").strip()
+            if wake_word in command:
+                command = command.replace(wake_word, "").strip()
         
         # Handle keyboard shortcuts
         if command in self.keyboard_shortcuts:
             command = self.keyboard_shortcuts[command]
             logging.info(f"Expanded shortcut to: {command}")
         
-        # Check each command pattern
-        for cmd_key, cmd_function in self.commands.items():
-            if command.startswith(cmd_key):
-                # Extract the parameter (text after the command)
-                param = command[len(cmd_key):].strip()
-                
-                try:
-                    cmd_function(param)
-                    return True
-                except Exception as e:
-                    logging.error(f"Error executing command '{cmd_key}': {e}")
-                    self.speak(f"Sorry, I had a problem with that command: {str(e)}")
-                    return False
+        # Try to match command using fuzzy matching for better voice recognition
+        cmd_key, param = self.fuzzy_command_match(command)
+        
+        if cmd_key:
+            cmd_function = self.commands[cmd_key]
+            try:
+                cmd_function(param)
+                # Provide audio feedback for success
+                if self.provide_audio_feedback:
+                    self.play_audio_feedback("success")
+                return True
+            except Exception as e:
+                logging.error(f"Error executing command '{cmd_key}': {e}")
+                self.speak(f"Sorry, I had a problem with that command: {str(e)}")
+                # Provide audio feedback for failure
+                if self.provide_audio_feedback:
+                    self.play_audio_feedback("failure")
+                return False
         
         # If we get here, command wasn't recognized
         logging.warning(f"Unrecognized command: {command}")
@@ -400,17 +686,17 @@ class VoiceAssistant(SmartGlasses):
         lowercase_query = query.lower()
         
         # Check for special commands that should use specialized modules
-        if "describe" in lowercase_query and "scene" in lowercase_query:
+        if any(word in lowercase_query for word in ["describe", "what do you see", "front of me"]):
             self.speak("I'll describe what I see.")
             self.cmd_describe_scene("")
             return
             
-        elif "read" in lowercase_query and ("text" in lowercase_query or "this" in lowercase_query):
+        elif any(word in lowercase_query for word in ["read", "text", "document"]):
             self.speak("I'll read the text I see.")
             self.cmd_read_text("")
             return
             
-        elif "who" in lowercase_query and ("person" in lowercase_query or "face" in lowercase_query or "this" in lowercase_query):
+        elif any(word in lowercase_query for word in ["who", "person", "face", "recognize"]):
             self.speak("I'll try to identify who I see.")
             self.cmd_identify_person("")
             return
@@ -420,7 +706,7 @@ class VoiceAssistant(SmartGlasses):
             self.cmd_identify_color("")
             return
             
-        elif "currency" in lowercase_query or "money" in lowercase_query:
+        elif any(word in lowercase_query for word in ["currency", "money", "bill", "coin", "cash"]):
             self.speak("I'll check for currency.")
             self.cmd_identify_currency("")
             return
@@ -516,18 +802,28 @@ class VoiceAssistant(SmartGlasses):
         # Initialize speech recognition if microphone is available
         if self.has_microphone:
             self.initialize_speech_recognition()
+            
+            # Provide startup audio feedback
+            self.play_audio_feedback("startup")
         else:
             logging.info("Microphone not available - starting in keyboard input mode")
             self.speak("Microphone not available. Please type commands instead.")
         
+        # Start keyboard input thread for fallback
+        threading.Thread(target=self.keyboard_input_thread, daemon=True).start()
+        
         try:
             while self.running:
-                if self.has_microphone:
+                if not self.keyboard_queue.empty():
+                    # Process command from keyboard queue
+                    command = self.keyboard_queue.get()
+                    self.process_command(command)
+                elif self.has_microphone:
                     # Voice command mode
                     self.listen_for_commands()
                 else:
-                    # Keyboard input fallback mode
-                    self.keyboard_command_mode()
+                    # Just wait if using keyboard exclusively
+                    time.sleep(0.1)
                 
                 # Sleep briefly to prevent CPU overuse
                 time.sleep(0.1)

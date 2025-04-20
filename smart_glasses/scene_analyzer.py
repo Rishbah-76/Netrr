@@ -13,7 +13,7 @@ load_dotenv()
 class SceneAnalyzer(SmartGlasses):
     """Scene analysis, color identification, and specialized recognition"""
     
-    def __init__(self, config=None):
+    def __init__(self, config=None, mistral_api_key=None):
         # Initialize the base class
         super().__init__(config)
         
@@ -21,8 +21,14 @@ class SceneAnalyzer(SmartGlasses):
         self.active_threads = []
         self.thread_lock = threading.Lock()
         
-        # Get API keys from environment variables
+        # Get API keys from environment variables or from parameters
         self.moondream_api_key = os.environ.get("MOONDREAM_API_KEY")
+        
+        # Set Mistral API key from parameter or config
+        if mistral_api_key:
+            if self.config is None:
+                self.config = {}
+            self.config["mistral_api_key"] = mistral_api_key
         
         # Moondream client (will be initialized later)
         self.moondream_client = None

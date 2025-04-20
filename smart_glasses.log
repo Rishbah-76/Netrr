@@ -1,0 +1,17 @@
+2025-04-19 04:08:33,961 - root - INFO - Bluetooth audio preferred by configuration
+2025-04-19 04:08:33,962 - root - INFO - Using object detection model: yoloe-11s-seg.pt
+2025-04-19 04:08:33,962 - root - INFO - Initializing Smart Glasses system...
+2025-04-19 04:08:33,963 - root - INFO - Initializing object detection module...
+2025-04-19 04:08:33,966 - root - WARNING - Microphone detection failed: Could not find PyAudio; check installation
+2025-04-19 04:08:34,055 - comtypes.client._code_cache - INFO - Imported existing <module 'comtypes.gen' from 'C:\\Users\\rbris\\anaconda3\\Lib\\site-packages\\comtypes\\gen\\__init__.py'>
+2025-04-19 04:08:34,086 - comtypes.client._code_cache - INFO - Using writeable comtypes cache directory: 'C:\Users\rbris\anaconda3\Lib\site-packages\comtypes\gen'
+2025-04-19 04:08:34,467 - root - INFO - Detected 3 voices for text-to-speech
+2025-04-19 04:08:34,504 - root - WARNING - Microphone not available - using keyboard input fallback
+2025-04-19 04:08:34,505 - root - INFO - Speaker is available
+2025-04-19 04:08:34,506 - root - WARNING - PiCamera2 module not available - using webcam or mock camera
+2025-04-19 04:08:35,296 - root - INFO - Webcam initialized successfully
+2025-04-19 04:08:36,571 - root - INFO - Mistral client initialized
+2025-04-19 04:08:36,631 - root - INFO - pyttsx3 text-to-speech engine initialized
+2025-04-19 04:08:36,631 - root - INFO - Smart Glasses system initialized
+2025-04-19 04:37:38,141 - root - ERROR - Error initializing system: PytorchStreamReader failed reading zip archive: failed finding central directory
+2025-04-19 04:37:38,178 - root - INFO - Smart Glasses system has been shut down

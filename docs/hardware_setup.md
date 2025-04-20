@@ -1,4 +1,4 @@
-# Hardware Setup Guide
+C# Hardware Setup Guide
 
 This guide explains how to set up the required hardware components for the Smart AI Glasses system.
 

@@ -279,22 +279,193 @@ class FaceRecognizer(SmartGlasses):
             self.speak(f"I don't know anyone named {name}")
             return None
     
+    def delete_person(self, name):
+        """Delete a person from the face database and metadata"""
+        if not self.face_recognition_available:
+            self.speak("Face recognition not available")
+            return False
+            
+        # Check if the person exists
+        if name in self.known_faces:
+            # Remove from face encodings database
+            del self.known_faces[name]
+            # Save the updated database
+            with open(self.face_db_path, 'wb') as f:
+                pickle.dump(self.known_faces, f)
+                
+            # Remove from metadata if exists
+            if name in self.face_metadata:
+                del self.face_metadata[name]
+                self.save_metadata()
+                
+            self.speak(f"Deleted {name} from the recognition system")
+            print(f"Deleted {name} from the face database")
+            return True
+        else:
+            self.speak(f"I don't know anyone named {name}")
+            return False
+            
+    def list_known_people(self):
+        """List all known people in the database"""
+        if not self.known_faces:
+            self.speak("No faces in the database")
+            print("No faces in the database")
+            return []
+            
+        known_people = list(self.known_faces.keys())
+        self.speak(f"I know {len(known_people)} people: {', '.join(known_people)}")
+        print("\nKnown people in database:")
+        for person in known_people:
+            encounters = self.face_metadata.get(person, {}).get("encounters", 0)
+            print(f"- {person} (seen {encounters} times)")
+        return known_people
+        
     def run_face_recognition_loop(self):
         """Main face recognition loop"""
         try:
+            # Display available commands
+            print("\nFace Recognition Keyboard Commands:")
+            print("  r - Remember new face (add to database)")
+            print("  d - Delete a person from recognition system")
+            print("  l - List all known people")
+            print("  i - Get info about a known person")
+            print("  n - Add a note about a person")
+            print("  q - Quit\n")
+            
+            self.speak("Face recognition active. Press 'r' to remember a new face.")
+            
+            # State for keyboard input
+            input_mode = None
+            current_frame = None
+            
             while True:
                 # Capture frame
                 frame = self.capture_frame()
+                current_frame = frame.copy()  # Store a copy for learning faces
                 
                 # Process for face recognition
                 processed_frame = self.recognize_faces(frame)
                 
+                # Add instruction on the frame
+                if input_mode == "remember":
+                    instruction = "Enter name in terminal to remember this face"
+                elif input_mode == "delete":
+                    instruction = "Enter name in terminal to delete a person"
+                elif input_mode == "info":
+                    instruction = "Enter name in terminal to get info"
+                elif input_mode == "note":
+                    instruction = "Enter name in terminal to add a note"
+                else:
+                    # Show controls reminder
+                    instruction = "r: Remember | d: Delete | l: List | i: Info | n: Note | q: Quit"
+                
+                cv2.putText(processed_frame, instruction, (10, 30), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                
                 # Display the frame
                 cv2.imshow("Face Recognition", processed_frame)
                 
+                # Check for keyboard input
+                key = cv2.waitKey(1) & 0xFF
+                
                 # Exit on 'q' key
-                if cv2.waitKey(1) & 0xFF == ord('q'):
+                if key == ord('q'):
                     break
+                    
+                # Remember new face on 'r' key
+                elif key == ord('r') and input_mode is None:
+                    input_mode = "remember"
+                    self.speak("Enter a name for this face")
+                    print("\n📝 Enter name for this face: ", end='', flush=True)
+                    name = input().strip()
+                    
+                    if name:
+                        self.speak(f"Looking for a face to remember as {name}")
+                        
+                        if len(face_recognition.face_locations(cv2.cvtColor(current_frame, cv2.COLOR_BGR2RGB))) > 0:
+                            # Face detected in the current frame
+                            self.start_learning_mode(name)
+                            # Use the current frame to learn the face immediately
+                            rgb_frame = cv2.cvtColor(current_frame, cv2.COLOR_BGR2RGB)
+                            face_locations = face_recognition.face_locations(rgb_frame)
+                            if face_locations:
+                                face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
+                                if face_encodings:
+                                    self.learn_face(name, face_encodings[0])
+                                    self.speak(f"I've learned to recognize {name}")
+                        else:
+                            self.speak("No face detected in the current frame")
+                    else:
+                        self.speak("Name cannot be empty")
+                    
+                    input_mode = None
+                
+                # Delete a person on 'd' key
+                elif key == ord('d') and input_mode is None:
+                    input_mode = "delete"
+                    # List known people first
+                    known_people = self.list_known_people()
+                    if known_people:
+                        self.speak("Enter the name of the person to delete")
+                        print("\n📝 Enter name to delete: ", end='', flush=True)
+                        name = input().strip()
+                        
+                        if name:
+                            # Ask for confirmation
+                            print(f"⚠️ Are you sure you want to delete {name}? (y/n): ", end='', flush=True)
+                            confirm = input().strip().lower()
+                            if confirm == 'y' or confirm == 'yes':
+                                self.delete_person(name)
+                            else:
+                                self.speak("Deletion cancelled")
+                        else:
+                            self.speak("Name cannot be empty")
+                    
+                    input_mode = None
+                
+                # List known people on 'l' key
+                elif key == ord('l') and input_mode is None:
+                    self.list_known_people()
+                    # Pause for a moment to allow reading the list
+                    time.sleep(2)
+                    
+                # Get info about a person on 'i' key
+                elif key == ord('i') and input_mode is None:
+                    input_mode = "info"
+                    self.speak("Enter the name of the person")
+                    print("\n📝 Enter name to get info: ", end='', flush=True)
+                    name = input().strip()
+                    
+                    if name:
+                        self.get_person_info(name)
+                    else:
+                        self.speak("Name cannot be empty")
+                    
+                    input_mode = None
+                    
+                # Add note about a person on 'n' key
+                elif key == ord('n') and input_mode is None:
+                    input_mode = "note"
+                    self.speak("Enter the name of the person to add a note")
+                    print("\n📝 Enter name to add a note: ", end='', flush=True)
+                    name = input().strip()
+                    
+                    if name:
+                        if name in self.face_metadata:
+                            self.speak(f"Enter a note for {name}")
+                            print(f"📝 Enter note for {name}: ", end='', flush=True)
+                            note = input().strip()
+                            
+                            if note:
+                                self.add_note_to_person(name, note)
+                            else:
+                                self.speak("Note cannot be empty")
+                        else:
+                            self.speak(f"I don't know anyone named {name}")
+                    else:
+                        self.speak("Name cannot be empty")
+                    
+                    input_mode = None
                     
         except KeyboardInterrupt:
             print("Face recognition stopped by user")

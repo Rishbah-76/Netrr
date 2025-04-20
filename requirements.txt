@@ -10,3 +10,6 @@ face-recognition
 picamera2
 moondream
 python-dotenv
+edge-tts
+# For Linux, also install an audio player: mpg123, ffplay (ffmpeg), mplayer, aplay, or SoX (play)
+# sudo apt-get install mpg123  # recommended
