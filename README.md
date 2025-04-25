@@ -225,6 +225,134 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 For support, please open an issue in the GitHub repository or contact the maintainers at support@netrr.ai
 
+## Testing
+
+### Test Environment Setup
+
+1. Navigate to the test directory:
+```bash
+cd smart_glasses/tests
+```
+
+2. Ensure test dependencies are installed:
+```bash
+pip install pytest pytest-cov
+```
+
+### Running Tests
+
+1. Run all tests:
+```bash
+pytest -v
+```
+
+2. Run tests with coverage report:
+```bash
+pytest --cov=smart_glasses tests/
+```
+
+3. Test specific modules:
+```bash
+# Test OCR module
+pytest tests/test_ocr.py
+
+# Test face recognition
+pytest tests/test_face_recognition.py
+
+# Test object detection
+pytest tests/test_object_detection.py
+
+# Test scene analyzer
+pytest tests/test_scene_analyzer.py
+
+# Test voice assistant
+pytest tests/test_voice_assistant.py
+
+# Test memory palace
+pytest tests/test_memory_palace.py
+```
+
+### Test Images
+
+The `test_images` directory contains sample images for testing different functionalities:
+- Text samples for OCR testing
+- Face samples for recognition testing
+- Object samples for detection testing
+- Scene samples for analysis testing
+- Memory samples for palace testing
+
+### Manual Testing
+
+1. Test OCR functionality:
+```bash
+cd smart_glasses
+python ocr_model.py --test --image test_images/text_sample.jpg
+```
+
+2. Test face recognition:
+```bash
+python face_capture.py --test --image test_images/face_sample.jpg
+```
+
+3. Test object detection:
+```bash
+python object_detection.py --test --image test_images/object_sample.jpg
+```
+
+4. Test scene analysis:
+```bash
+python scene_analyzer.py --test --image test_images/scene_sample.jpg
+```
+
+5. Test memory palace:
+```bash
+python memory_palace.py --test --image test_images/memory_sample.jpg
+```
+
+### Logging
+
+Test logs are stored in `smart_glasses.log`. To view the logs:
+```bash
+cat smart_glasses.log
+```
+
+### Troubleshooting Tests
+
+Common issues and solutions:
+
+1. Camera access errors:
+```bash
+# Check camera permissions
+sudo usermod -a -G video $USER
+```
+
+2. Audio device errors:
+```bash
+# List audio devices
+python -c "import sounddevice as sd; print(sd.query_devices())"
+```
+
+3. GPU memory issues:
+```bash
+# Force CPU usage by setting environment variable
+export CUDA_VISIBLE_DEVICES=""
+```
+
+4. Model download issues:
+```bash
+# Clear model cache
+rm -rf ~/.cache/torch/hub/
+```
+
+### Continuous Integration
+
+The project uses GitHub Actions for CI/CD. Tests are automatically run on:
+- Every push to main branch
+- Pull request creation
+- Daily scheduled runs
+
+View the test results in the Actions tab of the GitHub repository.
+
 ---
 
 Made with ❤️ for accessibility and inclusion. 
