@@ -1,185 +1,230 @@
-# Smart AI Glasses for the Visually Impaired
+# Netrr - AI Glasses for Sight Assistance
 
-A comprehensive assistive technology system that combines computer vision, AI, and natural language processing to help visually impaired individuals navigate and interact with their environment.
+![Netrr Logo](assets/netrr_logo.png) *(Note: Please add your project logo)*
+
+## Overview
+
+Netrr is a comprehensive AI-powered assistance system designed to help visually impaired individuals navigate their environment more effectively. The system combines multiple AI technologies including OCR, face recognition, object detection, voice interaction, and memory assistance to provide real-time assistance.
 
 ## Features
 
-- **Object Detection**: Identifies objects in the environment with position awareness (e.g., "chair at middle left, medium distance")
-- **Safety Awareness**: Detects and warns about obstacles, stairs, edges, and other safety hazards
-- **Text Recognition**: Reads text from books, signs, displays, etc. using cloud-based OCR
-- **Text Translation**: Translates text between multiple languages
-- **Face Recognition**: Identifies known people by name, estimates age/gender, and remembers new people
-- **Scene Description**: Explains surroundings using Moondream's rich visual analysis
-- **Color Identification**: Recognizes and names colors in the environment
-- **Currency Recognition**: Identifies different currencies and denominations
-- **Voice Interface**: Accepts voice commands for all functionality
-- **Conversation Mode**: Natural language conversation capability
-- **Hardware Adaptability**: Automatically detects available hardware and provides fallbacks when needed
-- **Keyboard Control**: Provides keyboard input option when microphone isn't available
+### 1. OCR Module (`ocr_model.py`)
+- Real-time text detection and reading from camera feed
+- Voice-controlled operation
+- Natural text-to-speech output
+- Support for document reading and text navigation
 
-## System Architecture
+### 2. Face Recognition (`face_capture.py`)
+- Real-time face detection and recognition
+- Voice-guided face enrollment
+- Person identification with name announcement
+- Note-taking capability for each recognized person
+- Maintains a database of known faces with metadata
 
-The system is organized into modular components:
+### 3. Object Detection (`object_detection.py`)
+- Real-time hazardous object detection
+- Spatial awareness with position reporting (left, right, center)
+- LIDAR integration for distance measurement
+- Focus on safety-critical objects (knives, scissors, etc.)
 
-- **Base**: Core functionality shared across all modules
-- **Object Detector**: YOLOv8-based object detection with spatial awareness
-- **Text Reader**: Cloud-based OCR and translation capabilities
-- **Face Recognizer**: Face detection, recognition, and metadata storage
-- **Scene Analyzer**: Scene description using Moondream, color identification, currency recognition
-- **Voice Assistant**: Voice command processing and conversation interface
+### 4. Scene Analysis (`scene_analyzer.py`)
+- Comprehensive scene description
+- Real-time environment analysis
+- Natural language scene narration
+- Integration with advanced vision models
+
+### 5. Voice Assistant (`voice_assistant.py`)
+- Natural language interaction
+- Context-aware conversations
+- Command interpretation
+- Real-time response streaming
+
+### 6. Memory Palace (`memory_palace.py`)
+- AI-powered image memory system
+- Automatic image captioning using BLIP model
+- Semantic search capabilities using FAISS
+- Voice-controlled memory queries
+- Natural language responses using LLaMA
+- Temporal memory organization
+- Efficient memory storage and retrieval
+- Multi-modal interaction (voice + vision)
 
 ## Requirements
 
-- Raspberry Pi 4B (4GB RAM)
-- Raspberry Pi Camera Module V2 or compatible camera
-- Speaker or headphones (optional - system works without them)
-- Microphone (optional - can use keyboard input instead)
-- Internet connection for API-based features
-- API keys (Mistral, Moondream, Google Cloud Vision)
+### Hardware
+- Raspberry Pi (4 recommended)
+- PiCamera v2 or compatible camera
+- LIDAR sensor (for object detection)
+- Microphone
+- Speaker/Headphones
+- Internet connection
 
 ### Software Dependencies
+```bash
+# Core dependencies
+python>=3.8
+opencv-python>=4.8.0
+numpy>=1.24.0
+picamera2>=0.3.12
+pyaudio>=0.2.13
+edge-tts>=6.1.9
+python-dotenv>=1.0.0
+pillow>=10.0.0
 
-- Python 3.7+
-- OpenCV
-- Ultralytics YOLOv8
-- Mistral AI API
-- Moondream API
-- Google Cloud Vision API (optional)
-- SpeechRecognition
-- face_recognition
-- picamera2
+# AI/ML dependencies
+face-recognition>=1.3.0
+ultralytics>=8.0.0
+openai>=1.0.0
+mistralai>=0.0.7
+transformers
+sentence-transformers
+faiss-cpu
+torch>=2.0.0
+huggingface-hub
+
+# Audio processing
+sounddevice>=0.4.6
+soundfile>=0.12.1
+wave>=0.0.2
+
+# Serial communication
+pyserial>=3.5
+
+# Other utilities
+tqdm>=4.66.1
+ollama>=0.1.0
+```
 
 ## Installation
 
+1. Clone the repository:
 ```bash
-# Clone the repository
-git clone https://github.com/your-username/smart-glasses.git
-cd smart-glasses
-
-# Create and activate a virtual environment (recommended)
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install the package and dependencies
-pip install -e .
-
-# Configure API keys
-cp .env.example .env
-# Edit .env file with your API keys
+git clone https://github.com/yourusername/netrr.git
+cd netrr
 ```
 
-## Performance Optimizations
+2. Create and activate a virtual environment:
+```bash
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# or
+.\venv\Scripts\activate  # Windows
+```
 
-This system is designed to run efficiently on a Raspberry Pi 4B with 4GB RAM:
+3. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
 
-- **Cloud-Based OCR**: Instead of resource-intensive local OCR with PyTesseract, we use cloud APIs for better performance
-- **Moondream API**: Utilizes the cloud-based Moondream API for scene analysis instead of running the model locally
-- **Efficient Image Processing**: Resizes images before processing to reduce memory usage
-- **Caching Mechanism**: Avoids repetitive analysis of similar scenes
-- **Hardware Adaptability**: Automatically detects available hardware and adjusts functionality
+4. Set up environment variables:
+Create a `.env` file in the project root with:
+```
+MISTRAL_API_KEY=your_mistral_api_key
+LEMONFOX_API_KEY=your_lemonfox_api_key
+HUGGINGFACE_TOKEN=your_huggingface_token
+```
+
+5. Create necessary directories:
+```bash
+mkdir images  # For Memory Palace image storage
+```
 
 ## Usage
 
-### Running the Full System
+### Starting the System
 
+1. **Full System Start**
 ```bash
-# Basic usage
-smart-glasses --mode all
-
-# Force hardware settings (useful for testing)
-smart-glasses --mode all --mic false --speaker false
-
-# Specify custom log file and level
-smart-glasses --mode all --log-file custom.log --log-level DEBUG
+python main.py
 ```
 
-### Hardware Detection
-
-The system automatically detects available hardware components:
-
-- If a microphone is not available, it falls back to keyboard input
-- If speakers are not available, all output is logged to console/file
-- You can override detection with `--mic` and `--speaker` options
-
-### Keyboard Commands
-
-When a microphone is not available or if you prefer keyboard input:
-
-- Type commands in the console after the prompt (`>`)
-- Use shortcuts for common commands:
-  - `d` - Describe scene
-  - `r` - Read text
-  - `t` - Translate text
-  - `w` - Identify person
-  - `c` - Identify color
-  - `m` - Identify currency
-  - `conv` - Start conversation mode
-  - `exit` - Exit conversation mode
-  - `h` - Help
-  - `q` - Quit the program
-
-### Running Specific Modules
-
+2. **Individual Modules**
+- OCR Mode:
 ```bash
-# Run only object detection
-smart-glasses --mode object
-
-# Run only text recognition
-smart-glasses --mode text
-
-# Run only face recognition
-smart-glasses --mode face
-
-# Run only scene analysis
-smart-glasses --mode scene
-
-# Run only voice assistant
-smart-glasses --mode voice
+python ocr_model.py
+```
+- Face Recognition:
+```bash
+python face_capture.py
+```
+- Object Detection:
+```bash
+python object_detection.py
+```
+- Scene Analysis:
+```bash
+python scene_analyzer.py
+```
+- Voice Assistant:
+```bash
+python voice_assistant.py
+```
+- Memory Palace:
+```bash
+python memory_palace.py
 ```
 
 ### Voice Commands
 
-- **"Hey glasses, describe"**: Describes the current scene using Moondream
-- **"Hey glasses, read"**: Reads text in view using cloud-based OCR
-- **"Hey glasses, translate to Spanish"**: Translates text to Spanish
-- **"Hey glasses, who is this"**: Identifies people in view
-- **"Hey glasses, remember John"**: Remembers a new face as "John"
-- **"Hey glasses, what color is this"**: Identifies dominant color
-- **"Hey glasses, currency"**: Identifies currency in view
-- **"Hey glasses, tell me about John"**: Retrieves information about a known person
-- **"Hey glasses, conversation mode"**: Enters natural conversation mode
-- **"Exit conversation"**: Exits conversation mode
-- **"Hey glasses, help"**: Lists available commands
+- "Read text" - Activate OCR
+- "Recognize faces" - Start face recognition
+- "Detect objects" - Begin object detection
+- "Describe scene" - Activate scene analysis
+- "Remember this" - Save current scene to Memory Palace
+- "Tell me about..." - Query Memory Palace
+- "Stop" - Halt current operation
+- "Exit" - Close the application
 
-### Logging
+## Architecture
 
-All system output is logged to:
-- Console output
-- Log file (default: `smart_glasses.log`)
+The system is built with a modular architecture where each component can work independently or as part of the complete system:
 
-You can customize the logging level and file with command line options.
+```
+Netrr
+├── Camera Input
+│   ├── OCR Module
+│   ├── Face Recognition
+│   ├── Object Detection
+│   ├── Scene Analysis
+│   └── Memory Palace
+├── Audio Processing
+│   ├── Voice Commands
+│   └── Text-to-Speech
+└── AI Processing
+    ├── YOLO Object Detection
+    ├── Face Recognition
+    ├── Scene Understanding
+    ├── Memory Indexing (FAISS)
+    └── Natural Language Processing
+```
 
-## Development
+## Contributing
 
-To extend or customize the system:
-
-1. Each module is a separate class that inherits from the base `SmartGlasses` class
-2. Add new functionality by extending existing classes or creating new ones
-3. Register new commands in the `VoiceAssistant` class
-4. Update the main application to include your new modules
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
-- YOLOv8 by Ultralytics
-- Mistral AI for their powerful LLM API
-- Moondream for vision-language capabilities
-- Google Cloud Vision for OCR capabilities
-- The open-source computer vision community
+- YOLO for object detection
+- Edge-TTS for text-to-speech
+- Mistral AI for advanced language processing
+- OpenAI for API integration
+- Face Recognition library contributors
+- Hugging Face for BLIP and transformer models
+- FAISS for efficient similarity search
+- LLaMA for natural language understanding
 
-## Contributors
+## Support
 
-- Your Name <your.email@example.com> 
+For support, please open an issue in the GitHub repository or contact the maintainers at support@netrr.ai
+
+---
+
+Made with ❤️ for accessibility and inclusion. 
